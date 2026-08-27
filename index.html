@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Verify — Access Gate</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root{
+    --bg: #11141c;
+    --bg-panel: #171b26;
+    --line: #262c3d;
+    --text: #e7e9f0;
+    --text-dim: #8992a8;
+    --amber: #e8a33d;
+    --amber-glow: rgba(232,163,61,0.35);
+    --green: #4ade80;
+    --red: #f2555a;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background: radial-gradient(1200px 600px at 50% -10%, #1a2030 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    display:flex; align-items:center; justify-content:center;
+    padding: 24px;
+  }
+  .card{
+    width:100%; max-width: 380px;
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 32px 28px 28px;
+    text-align:center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  .eyebrow{
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 22px;
+  }
+  .gate-light{
+    width:64px; height:64px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    position: relative;
+    display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(circle at 50% 40%, #1c2130, #12151f);
+    border: 1px solid var(--line);
+  }
+  .gate-light::after{
+    content:"";
+    position:absolute; inset:-6px;
+    border-radius:50%;
+    border: 1px solid var(--amber-glow);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  .gate-light.ok::after{ border-color: rgba(74,222,128,0.35); animation:none; box-shadow: 0 0 24px 4px rgba(74,222,128,0.25); }
+  .gate-light.err::after{ border-color: rgba(242,85,90,0.35); animation:none; }
+  .dot{
+    width:14px; height:14px; border-radius:50%;
+    background: var(--amber);
+    box-shadow: 0 0 16px 4px var(--amber-glow);
+    transition: all .25s ease;
+  }
+  .gate-light.ok .dot{ background: var(--green); box-shadow: 0 0 16px 4px rgba(74,222,128,0.45); }
+  .gate-light.err .dot{ background: var(--red); box-shadow: 0 0 16px 4px rgba(242,85,90,0.4); }
+  @keyframes pulse{
+    0%,100%{ transform: scale(1); opacity:1; }
+    50%{ transform: scale(1.12); opacity:0.4; }
+  }
+  h1{ font-size: 18px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
+  p.sub{ font-size: 13.5px; color: var(--text-dim); margin: 0 0 24px; line-height:1.5; }
+  #widgetHolder{ display:flex; justify-content:center; margin-bottom: 6px; min-height: 65px; }
+  .status-line{
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    margin-top: 18px;
+    letter-spacing: 0.02em;
+  }
+  .status-line .code{ color: var(--text); }
+  .btn{
+    display:none;
+    margin-top:18px;
+    width:100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border:none;
+    background: var(--amber);
+    color: #1a1204;
+    font-weight: 600;
+    font-size: 14px;
+    cursor:pointer;
+    font-family: var(--sans);
+  }
+  .btn.show{ display:inline-block; }
+  .footer-note{ margin-top: 22px; font-size: 11px; color: #545c72; }
+  @media (prefers-reduced-motion: reduce){ .gate-light::after{ animation:none; } }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="eyebrow">ACCESS GATE</div>
+    <div class="gate-light" id="gateLight"><div class="dot"></div></div>
+    <h1 id="title">Confirm you're human</h1>
+    <p class="sub" id="sub">One quick check, then you'll continue to your link.</p>
+
+    <div id="widgetHolder"></div>
+
+    <div class="status-line">STATUS · <span class="code" id="statusCode">WAITING</span></div>
+
+    <button class="btn" id="openBtn">Continue</button>
+    <div class="footer-note">No data is stored beyond this check.</div>
+  </div>
+
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit" async defer></script>
+<script>
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+
+  const gateLight = document.getElementById('gateLight');
+  const title = document.getElementById('title');
+  const sub = document.getElementById('sub');
+  const statusCode = document.getElementById('statusCode');
+  const openBtn = document.getElementById('openBtn');
+  const widgetHolder = document.getElementById('widgetHolder');
+
+  function setState(kind, t, s, code){
+    gateLight.className = 'gate-light' + (kind ? ' ' + kind : '');
+    title.textContent = t;
+    sub.textContent = s;
+    statusCode.textContent = code;
+  }
+
+  if(!token){
+    setState('err', 'Link not valid', 'This access link is missing or malformed. Go back to Telegram and request the file again.', 'NO_TOKEN');
+    widgetHolder.style.display = 'none';
+    return;
+  }
+
+  let redirectUrl = null;
+  let siteKey = null;
+  let turnstileReady = false;
+
+  function goToDestination(){
+    if(redirectUrl) window.location.href = redirectUrl;
+  }
+  openBtn.addEventListener('click', goToDestination);
+
+  async function onTurnstileSuccess(cfToken){
+    setState('', 'Verifying…', 'Almost there — confirming your check.', 'VERIFYING');
+    try{
+      const res = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cfToken, token })
+      });
+      const data = await res.json();
+      if(data.success && data.redirect){
+        redirectUrl = data.redirect;
+        setState('ok', "You're verified", 'Redirecting you to your link now.', 'PASSED');
+        setTimeout(goToDestination, 500);
+        setTimeout(function(){ openBtn.classList.add('show'); }, 1500);
+      } else {
+        setState('err', 'Verification failed', "That check didn't go through. Reload the page and try again.", 'FAILED');
+      }
+    }catch(e){
+      setState('err', 'Connection error', 'Could not reach the verification server. Check your connection and reload.', 'ERROR');
+    }
+  }
+  window.onTurnstileSuccess = onTurnstileSuccess;
+
+  function tryRender(){
+    if(turnstileReady && siteKey && window.turnstile){
+      window.turnstile.render('#widgetHolder', {
+        sitekey: siteKey,
+        callback: onTurnstileSuccess,
+        theme: 'dark'
+      });
+    }
+  }
+
+  window.onTurnstileLoad = function(){
+    turnstileReady = true;
+    tryRender();
+  };
+
+  fetch('/api/config')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data.siteKey){
+        setState('err', 'Setup incomplete', 'The verification service is not configured yet. Contact the bot owner.', 'NO_SITEKEY');
+        widgetHolder.style.display = 'none';
+        return;
+      }
+      siteKey = data.siteKey;
+      tryRender();
+    })
+    .catch(function(){
+      setState('err', 'Connection error', 'Could not load the verification widget. Reload the page.', 'ERROR');
+    });
+})();
+</script>
+</body>
+</html>
